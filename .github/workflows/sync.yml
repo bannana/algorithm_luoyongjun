@@ -1,0 +1,38 @@
+name: 同步到博客园+Halo
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**.cpp"
+      - "published.json"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安装依赖
+        run: pip install requests
+
+      - name: 双平台发布
+        env:
+          CNBLOGS_TOKEN: ${{ secrets.CNBLOGS_TOKEN }}
+          HALO_TOKEN: ${{ secrets.HALO_TOKEN }}
+          HALO_API: https://hecloud.top/apis/api.console.halo.run/v1alpha1
+        run: python3 publish.py --go
+
+      - name: 提交 published.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add published.json
+          git diff --staged --quiet || git commit -m "chore: 更新 published.json"
+          git push
