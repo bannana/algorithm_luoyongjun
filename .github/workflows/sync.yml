@@ -10,6 +10,8 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: 检出仓库
         uses: actions/checkout@v4
@@ -26,13 +28,12 @@ jobs:
         env:
           CNBLOGS_TOKEN: ${{ secrets.CNBLOGS_TOKEN }}
           HALO_TOKEN: ${{ secrets.HALO_TOKEN }}
-          HALO_API: https://hecloud.top/apis/api.console.halo.run/v1alpha1
-        run: python3 publish.py --go --live --allow-delete
+        run: python3 publish.py --go --live
 
       - name: 提交 published.json
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add published.json
-          git diff --staged --quiet || git commit -m "chore: 更新 published.json"
+          git diff --staged --quiet || git commit -m "chore: 更新 published.json [skip ci]"
           git push
