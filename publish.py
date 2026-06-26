@@ -1,18 +1,15 @@
 """
 双平台发布脚本：博客园 + Halo，检测 .cpp 文件变更，自动同步。
+仓库是唯一真理来源，平台多余文章自动清理。
 
-published.json 格式（每条记录）:
-  "1/1.1e1-约瑟夫问题.cpp": {
-    "hash": "abc123...",
-    "cnblogs": "20848330",
-    "halo":   "5152aea5-c2e8-..."
-  }
+published.json 格式:
+  "1/1.1e1-约瑟夫问题.cpp": {"hash":"...", "cnblogs":"20848330", "halo":"uuid"}
 
 用法：
   python3 publish.py                     # 预览变更
-  python3 publish.py --go                # 执行新增+修改
-  python3 publish.py --go --allow-delete # 执行新增+修改+删除
-  python3 publish.py --go --live         # 正式发布（不用草稿）
+  python3 publish.py --go                # 新增+修改
+  python3 publish.py --go --allow-delete # 新增+修改+删除(含平台孤儿清理)
+  python3 publish.py --go --live         # 正式发布
 """
 import json
 import hashlib
@@ -31,7 +28,6 @@ CNBLOGS_API   = "https://rpc.cnblogs.com/metaweblog/snyxz"
 
 HALO_TOKEN = os.environ.get("HALO_TOKEN", "")
 HALO_API   = os.environ.get("HALO_API", "https://hecloud.top/apis/api.console.halo.run/v1alpha1")
-# 算法竞赛分类 UUID（在 Halo 后台创建好的）
 HALO_CATEGORY = os.environ.get("HALO_CATEGORY", "3defca91-7105-43e9-92c9-67e9b32a1ed2")
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -65,7 +61,6 @@ def title_from_path(rel):
 
 
 def slug_from_path(rel):
-    """生成 Halo 友好 slug：1/1.1e1-xxx.cpp → 1-1e1-xxx"""
     stem = os.path.splitext(os.path.basename(rel))[0]
     return stem.replace(" ", "-").lower()
 
@@ -82,11 +77,24 @@ class Cnblogs:
             raise RuntimeError("未设置 CNBLOGS_TOKEN 环境变量")
         self.api = xmlrpc.client.ServerProxy(CNBLOGS_API)
 
+    def all_ids(self):
+        """返回平台上所有算法竞赛文章的 postid 集合"""
+        ids = set()
+        try:
+            posts = self.api.metaWeblog.getRecentPosts("snyxz", CNBLOGS_USER, CNBLOGS_TOKEN, 200)
+            for p in posts:
+                cats = p.get("categories", [])
+                if any("算法竞赛" in c for c in cats):
+                    ids.add(p["postid"])
+        except Exception as e:
+            print(f"[警告] 博客园获取文章列表失败: {e}")
+        return ids
+
     def create(self, fpath, draft):
         content = {
             "title": title_from_path(os.path.relpath(fpath, BASE)),
             "description": "<pre>" + open(fpath).read() + "</pre>",
-            "categories": ["算法竞赛"],
+            "categories": ["[随笔分类]算法竞赛"],
         }
         return self.api.metaWeblog.newPost("snyxz", CNBLOGS_USER, CNBLOGS_TOKEN, content, draft)
 
@@ -94,7 +102,7 @@ class Cnblogs:
         content = {
             "title": title_from_path(os.path.relpath(fpath, BASE)),
             "description": "<pre>" + open(fpath).read() + "</pre>",
-            "categories": ["算法竞赛"],
+            "categories": ["[随笔分类]算法竞赛"],
         }
         return self.api.metaWeblog.editPost(str(postid), CNBLOGS_USER, CNBLOGS_TOKEN, content, draft)
 
@@ -117,8 +125,19 @@ class Halo:
             "Content-Type": "application/json",
         }
 
+    def all_ids(self):
+        """返回平台上所有未删除文章的 name/UUID 集合"""
+        ids = set()
+        try:
+            r = requests.get(f"{HALO_API}/posts?size=200", headers=self.headers)
+            for it in r.json().get("items", []):
+                if not it["post"]["spec"].get("deleted"):
+                    ids.add(it["post"]["metadata"]["name"])
+        except Exception as e:
+            print(f"[警告] Halo 获取文章列表失败: {e}")
+        return ids
+
     def _get_post(self, name):
-        """获取单篇文章的完整 post+content 对象"""
         r = requests.get(f"{HALO_API}/posts/{name}", headers=self.headers)
         r.raise_for_status()
         return r.json()
@@ -138,35 +157,26 @@ class Halo:
                     "annotations": {"content.halo.run/permalink-pattern": "/archives/{slug}"},
                 },
                 "spec": {
-                    "title": title,
-                    "slug": slug,
-                    "deleted": False,
-                    "publish": not draft,
-                    "pinned": False,
-                    "allowComment": True,
-                    "visible": "PUBLIC",
-                    "priority": 0,
+                    "title": title, "slug": slug,
+                    "deleted": False, "publish": not draft,
+                    "pinned": False, "allowComment": True,
+                    "visible": "PUBLIC", "priority": 0,
                     "excerpt": {"autoGenerate": True, "raw": ""},
-                    "categories": [HALO_CATEGORY],
-                    "tags": [],
-                    "htmlMetas": [],
-                    "owner": "snyxz",
-                    "template": "",
-                    "cover": "",
+                    "categories": [HALO_CATEGORY], "tags": [], "htmlMetas": [],
+                    "owner": "snyxz", "template": "", "cover": "",
                 },
             },
-            "content": {
-                "raw": f"<pre>{code}</pre>",
-                "content": "",
-                "rawType": "HTML",
-            },
+            "content": {"raw": f"<pre>{code}</pre>", "content": "", "rawType": "HTML"},
         }
         r = requests.post(f"{HALO_API}/posts", headers=self.headers, json=body)
         r.raise_for_status()
-        return r.json()["metadata"]["name"]
+        result = r.json()
+        name = result["metadata"]["name"]
+        if not draft:
+            requests.put(f"{HALO_API}/posts/{name}/publish", headers=self.headers)
+        return name
 
     def update(self, name, fpath, draft):
-        """更新文章：先拉取完整对象，改内容后 PUT 回去"""
         old = self._get_post(name)
         title = title_from_path(os.path.relpath(fpath, BASE))
         code = open(fpath).read()
@@ -178,9 +188,10 @@ class Halo:
 
         r = requests.put(f"{HALO_API}/posts/{name}", headers=self.headers, json=old)
         r.raise_for_status()
+        if not draft:
+            requests.put(f"{HALO_API}/posts/{name}/publish", headers=self.headers)
 
     def delete(self, name):
-        """软删除：PUT deleted=true"""
         old = self._get_post(name)
         old["post"]["spec"]["deleted"] = True
         r = requests.put(f"{HALO_API}/posts/{name}", headers=self.headers, json=old)
@@ -192,14 +203,13 @@ class Halo:
 # ══════════════════════════════════════════════
 
 def main():
-    go_mode     = "--go" in sys.argv
+    go_mode      = "--go" in sys.argv
     allow_delete = "--allow-delete" in sys.argv
-    live_mode   = "--live" in sys.argv
+    live_mode    = "--live" in sys.argv
 
     draft = not live_mode
     tag   = "发布" if live_mode else "草稿"
 
-    # 初始化平台（有 token 就启用，没有就跳过）
     platforms = []
     if CNBLOGS_TOKEN:
         platforms.append(("博客园", Cnblogs()))
@@ -227,22 +237,32 @@ def main():
         h = hash_file(fpath)
         if rel not in record:
             new_files.append(rel)
-            continue
-        # 内容变了 → 修改
-        if record[rel].get("hash") != h:
+        elif record[rel].get("hash") != h:
             modified_files.append(rel)
-            continue
-        # 内容没变，但某个平台还没发过 → 也走新增（只补发缺失平台）
-        need_catchup = any(
-            name.lower() not in record[rel] or not record[rel][name.lower()]
-            for name, _ in platforms
-        )
-        if need_catchup:
-            modified_files.append(rel)  # 复用修改逻辑（有则更新，无则跳过）
+        else:
+            need_catchup = any(
+                not record[rel].get(p.key) for _, p in platforms
+            )
+            if need_catchup:
+                modified_files.append(rel)
 
     for rel in record:
         if rel not in current:
             deleted_keys.append(rel)
+
+    # ── 检查平台孤儿（平台有但 published.json 没有）──
+    orphans = {}
+    if allow_delete:
+        for pname, p in platforms:
+            valid_ids = set()
+            for rel, entry in record.items():
+                pid = entry.get(p.key)
+                if pid:
+                    valid_ids.add(pid)
+            remote_ids = p.all_ids()
+            orphan_ids = remote_ids - valid_ids
+            if orphan_ids:
+                orphans[pname] = orphan_ids
 
     # ── 预览模式 ──
     if not go_mode:
@@ -255,8 +275,13 @@ def main():
         print(f"删除  {len(deleted_keys)} 篇  (需 --allow-delete)")
         for f in deleted_keys:
             print(f"  - {f}")
+        if orphans:
+            for pname, ids in orphans.items():
+                print(f"孤儿  {len(ids)} 篇 on {pname}  (需 --allow-delete)")
+        else:
+            print("孤儿  0 篇 (平台与仓库一致)")
         print(f"\n平台: {', '.join(p[0] for p in platforms)}")
-        if new_files or modified_files or (deleted_keys and allow_delete):
+        if new_files or modified_files or (deleted_keys and allow_delete) or orphans:
             print(f"确认后执行: python3 publish.py --go")
         else:
             print("没有变更。")
@@ -264,9 +289,21 @@ def main():
 
     # ── 执行模式 ──
 
-    # 删除
+    # 平台孤儿清理
+    for pname, p in platforms:
+        if pname not in orphans:
+            continue
+        for pid in orphans[pname]:
+            try:
+                p.delete(pid)
+                print(f"[清理孤儿-{pname}] {pid}")
+            except Exception as e:
+                print(f"[清理孤儿失败-{pname}] {pid}: {e}")
+            time.sleep(0.5)
+
+    # 删除仓库已删除的文件
     if deleted_keys and not allow_delete:
-        print(f"[跳过删除] {len(deleted_keys)} 篇不在本地，加 --allow-delete 才删")
+        print(f"[跳过删除] {len(deleted_keys)} 篇，加 --allow-delete 才删")
     else:
         for rel in deleted_keys:
             for pname, p in platforms:
@@ -279,7 +316,6 @@ def main():
                     print(f"[删除-{pname}] {rel}")
                 except Exception as e:
                     print(f"[删除失败-{pname}] {rel}: {e}")
-            # 两个平台都删完了，清理记录
             if set(record[rel].keys()) <= {"hash"}:
                 del record[rel]
 
@@ -296,14 +332,13 @@ def main():
             time.sleep(1.5)
         record[rel] = entry
 
-    # 修改（含补发：某平台还没发过的，自动创建）
+    # 修改（含补发）
     for rel in modified_files:
         entry = record[rel]
         entry["hash"] = hash_file(current[rel])
         for pname, p in platforms:
             pid = entry.get(p.key)
             if not pid:
-                # 没发过这个平台 → 新建
                 try:
                     pid = p.create(current[rel], draft)
                     entry[p.key] = pid

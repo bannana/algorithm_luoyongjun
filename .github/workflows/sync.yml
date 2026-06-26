@@ -27,7 +27,7 @@ jobs:
           CNBLOGS_TOKEN: ${{ secrets.CNBLOGS_TOKEN }}
           HALO_TOKEN: ${{ secrets.HALO_TOKEN }}
           HALO_API: https://hecloud.top/apis/api.console.halo.run/v1alpha1
-        run: python3 publish.py --go
+        run: python3 publish.py --go --live --allow-delete
 
       - name: 提交 published.json
         run: |
