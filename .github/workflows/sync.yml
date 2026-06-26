@@ -3,9 +3,6 @@ name: 同步到博客园+Halo
 on:
   push:
     branches: [main]
-    paths:
-      - "**.cpp"
-      - "published.json"
 
 jobs:
   sync:
@@ -35,5 +32,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add published.json
-          git diff --staged --quiet || git commit -m "chore: 更新 published.json [skip ci]"
+          git diff --staged --quiet || git commit -m "chore: 更新 published.json"
           git push
