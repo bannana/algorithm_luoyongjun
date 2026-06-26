@@ -95,10 +95,13 @@ class Halo:
             "Content-Type": "application/json",
         }
 
-    def _get_post(self, name):
-        r = requests.get(f"{HALO_API}/posts/{name}", headers=self.headers)
-        r.raise_for_status()
-        return r.json()
+    def _get_full(self, name):
+        """从列表 API 找到单篇文章的 post+content"""
+        r = requests.get(f"{HALO_API}/posts?size=200", headers=self.headers)
+        for it in r.json().get("items", []):
+            if it["post"]["metadata"]["name"] == name:
+                return it["post"], it.get("content", {"raw": "<p></p>", "content": "", "rawType": "HTML"})
+        raise ValueError(f"文章 {name} 未找到")
 
     def _publish(self, name):
         requests.put(f"{HALO_API}/posts/{name}/publish", headers=self.headers)
@@ -132,22 +135,24 @@ class Halo:
         return name
 
     def delete(self, name):
-        old = self._get_post(name)
-        old["post"]["spec"]["deleted"] = True
-        r = requests.put(f"{HALO_API}/posts/{name}", headers=self.headers, json=old)
+        post, content = self._get_full(name)
+        post["spec"]["deleted"] = True
+        body = {"post": post, "content": content}
+        r = requests.put(f"{HALO_API}/posts/{name}", headers=self.headers, json=body)
         r.raise_for_status()
 
     def update(self, name, fpath, draft):
-        old = self._get_post(name)
+        post, content = self._get_full(name)
         title = title_from_path(os.path.relpath(fpath, BASE))
         code = open(fpath).read()
 
-        old["post"]["spec"]["title"] = title
-        old["post"]["spec"]["publish"] = not draft
-        old["post"]["metadata"]["annotations"]["content.halo.run/permalink-pattern"] = "/archives/{slug}"
-        old["content"]["raw"] = f"<pre>{code}</pre>"
+        post["spec"]["title"] = title
+        post["spec"]["publish"] = not draft
+        post["metadata"]["annotations"]["content.halo.run/permalink-pattern"] = "/archives/{slug}"
+        content["raw"] = f"<pre>{code}</pre>"
 
-        r = requests.put(f"{HALO_API}/posts/{name}", headers=self.headers, json=old)
+        body = {"post": post, "content": content}
+        r = requests.put(f"{HALO_API}/posts/{name}", headers=self.headers, json=body)
         r.raise_for_status()
         if not draft:
             self._publish(name)
