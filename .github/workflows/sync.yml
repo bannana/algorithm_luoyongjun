@@ -62,6 +62,7 @@ jobs:
         env:
           CNBLOGS_TOKEN: ${{ secrets.CNBLOGS_TOKEN }}
           HALO_TOKEN: ${{ secrets.HALO_TOKEN }}
+          HALO_API: http://8.141.25.78:8090/apis/api.console.halo.run/v1alpha1
         run: python3 publish.py --go --live
 
       - name: 提交 published.json
