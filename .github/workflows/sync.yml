@@ -21,6 +21,43 @@ jobs:
       - name: 安装依赖
         run: pip install requests
 
+      - name: 网络诊断
+        env:
+          HALO_TOKEN: ${{ secrets.HALO_TOKEN }}
+        run: |
+          python3 -c "
+          import requests, os
+          token = os.environ['HALO_TOKEN']
+          api = 'https://hecloud.top/apis/api.console.halo.run/v1alpha1'
+          h = {'Authorization': f'Bearer {token}'}
+
+          # 1. DNS
+          import socket
+          print('DNS:', socket.gethostbyname('hecloud.top'))
+
+          # 2. GET 测试
+          r = requests.get(f'{api}/posts?size=1', headers=h, timeout=15)
+          print(f'GET: {r.status_code} server={r.headers.get(\"server\",\"?\")} cf-ray={r.headers.get(\"cf-ray\",\"?\")[:20]}')
+
+          # 3. POST 测试
+          import uuid
+          r2 = requests.post(f'{api}/posts', headers={**h, 'Content-Type': 'application/json'}, json={
+              'post': {
+                  'apiVersion': 'content.halo.run/v1alpha1', 'kind': 'Post',
+                  'metadata': {'name': str(uuid.uuid4()), 'annotations': {'content.halo.run/permalink-pattern': '/archives/{slug}'}},
+                  'spec': {'title': 'diag-test', 'slug': f'diag-{uuid.uuid4().hex[:8]}', 'deleted': False, 'publish': False, 'pinned': False, 'allowComment': True, 'visible': 'PUBLIC', 'priority': 0, 'excerpt': {'autoGenerate': True, 'raw': ''}, 'categories': ['3defca91-7105-43e9-92c9-67e9b32a1ed2'], 'tags': [], 'htmlMetas': [], 'owner': 'snyxz', 'template': '', 'cover': ''}
+              },
+              'content': {'raw': '<p>diag</p>', 'content': '', 'rawType': 'HTML'}
+          }, timeout=15)
+          print(f'POST: {r2.status_code}')
+          if r2.status_code >= 400:
+              print(f'  body: {r2.text[:300]}')
+              print(f'  server={r2.headers.get(\"server\",\"?\")} cf-ray={r2.headers.get(\"cf-ray\",\"?\")[:30]}')
+          else:
+              print(f'  OK name={r2.json().get(\"metadata\",{}).get(\"name\",\"?\")[:20]}')
+          "
+        continue-on-error: true
+
       - name: 双平台发布
         env:
           CNBLOGS_TOKEN: ${{ secrets.CNBLOGS_TOKEN }}
