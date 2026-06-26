@@ -225,7 +225,7 @@ def main():
                 print(f"[删除-{p.name}] {rel}")
             except Exception as e:
                 print(f"[删除失败-{p.name}] {rel}: {e}")
-            time.sleep(0.5)
+            time.sleep(3)
         # 所有平台 ID 都清掉了才删除记录
         if set(record[rel].keys()) <= {"hash"}:
             del record[rel]
@@ -240,7 +240,7 @@ def main():
                 print(f"[{tag}-{p.name}] {rel} → {pid}")
             except Exception as e:
                 print(f"[失败-{p.name}] {rel}: {e}")
-            time.sleep(1.5)
+            time.sleep(3)
         record[rel] = entry
 
     # ── 修改/补发 ──
@@ -262,7 +262,7 @@ def main():
                     print(f"[更新-{p.name}] {rel} → {pid}")
                 except Exception as e:
                     print(f"[更新失败-{p.name}] {rel}: {e}")
-            time.sleep(1.5)
+            time.sleep(3)
 
     json.dump(record, open(SAVE, "w"), indent=2, ensure_ascii=False)
     print(f"\n{'✅'.join(p.name for p in platforms)} 完成。请 git commit published.json。")
