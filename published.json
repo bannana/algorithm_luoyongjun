@@ -174,9 +174,14 @@
     "cnblogs": "20849955",
     "halo": "6741adee-162c-407e-a3a7-f8f4e83f45f7"
   },
-  "2/2.1e1-Palindromes.cpp": {
-    "hash": "082e33f9fe579a1903573e0dc11fb32b",
-    "cnblogs": "20849956",
-    "halo": "4b2f2518-12c1-499f-9241-1a29ceb5cb4e"
+  "2/2.2e1-Palindromes.cpp": {
+    "hash": "1b27ff9832d70d9ce13748eaf4a51c72",
+    "cnblogs": "20872030",
+    "halo": "f9bca3cb-a38a-4acb-93db-ead45f00d377"
+  },
+  "2/2.2t1-Subsequence.cpp": {
+    "hash": "c81e728d9d4c2f636f067f89cc14862c",
+    "cnblogs": "20872034",
+    "halo": "ab3a771e-f4b8-40a4-8476-ef6515b8df65"
   }
 }
