@@ -126,7 +126,7 @@ class Halo:
                     "owner": "snyxz", "template": "", "cover": "",
                 },
             },
-            "content": {"raw": f"<pre>{code}</pre>", "content": "", "rawType": "HTML"},
+            "content": {"raw": f"<pre>{code}</pre>", "content": f"<pre>{code}</pre>", "rawType": "HTML"},
         }
         r = requests.post(f"{HALO_API}/posts", headers=self.headers, json=body)
         r.raise_for_status()
@@ -151,6 +151,7 @@ class Halo:
         post["spec"]["publish"] = not draft
         post["metadata"]["annotations"]["content.halo.run/permalink-pattern"] = "/archives/{slug}"
         content["raw"] = f"<pre>{code}</pre>"
+        content["content"] = f"<pre>{code}</pre>"
 
         body = {"post": post, "content": content}
         r = requests.put(f"{HALO_API}/posts/{name}", headers=self.headers, json=body)
