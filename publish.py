@@ -12,6 +12,7 @@ import os
 import sys
 import time
 import uuid
+import html
 import xmlrpc.client
 import requests
 
@@ -110,7 +111,7 @@ class Halo:
         name = str(uuid.uuid4())
         title = title_from_path(os.path.relpath(fpath, BASE))
         slug = slug_from_path(os.path.relpath(fpath, BASE))
-        code = open(fpath).read()
+        code = html.escape(open(fpath).read())
 
         body = {
             "post": {
@@ -144,7 +145,7 @@ class Halo:
     def update(self, name, fpath, draft):
         post, content = self._get_full(name)
         title = title_from_path(os.path.relpath(fpath, BASE))
-        code = open(fpath).read()
+        code = html.escape(open(fpath).read())
 
         post["spec"]["title"] = title
         post["spec"]["publish"] = not draft
