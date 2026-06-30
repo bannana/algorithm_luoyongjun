@@ -233,21 +233,26 @@ def main():
 
     # ── 新增 ──
     for rel in new_files:
-        entry = {"hash": hash_file(current[rel])}
+        entry = {}
+        halo_ok = False
         for p in platforms:
             try:
                 pid = p.create(current[rel], draft)
                 entry[p.key] = pid
                 print(f"[{tag}-{p.name}] {rel} → {pid}")
+                if p.key == "halo":
+                    halo_ok = True
             except Exception as e:
                 print(f"[失败-{p.name}] {rel}: {e}")
             time.sleep(3)
+        if halo_ok or "halo" not in [p.key for p in platforms]:
+            entry["hash"] = hash_file(current[rel])
         record[rel] = entry
 
     # ── 修改/补发 ──
     for rel in modified_files:
         entry = record[rel]
-        entry["hash"] = hash_file(current[rel])
+        halo_ok = False
         for p in platforms:
             pid = entry.get(p.key)
             if not pid:
@@ -261,9 +266,14 @@ def main():
                 try:
                     p.update(pid, current[rel], draft)
                     print(f"[更新-{p.name}] {rel} → {pid}")
+                    if p.key == "halo":
+                        halo_ok = True
                 except Exception as e:
                     print(f"[更新失败-{p.name}] {rel}: {e}")
             time.sleep(3)
+        # 只有 Halo 侧真正更新成功才更新 hash，否则下次重试
+        if halo_ok or "halo" not in [p.key for p in platforms]:
+            entry["hash"] = hash_file(current[rel])
 
     json.dump(record, open(SAVE, "w"), indent=2, ensure_ascii=False)
     print(f"\n{'✅'.join(p.name for p in platforms)} 完成。请 git commit published.json。")
